@@ -15,14 +15,14 @@ function add() : void
     $yaml_hash = save_yaml($yaml_str);
 
     if (isset($yaml['install']) && isset($yaml['install']['package'])) {
-        $requirement = add_requirement($yaml['install']['package'], (isset($yaml['install']['mode']) && $yaml['install']['mode'] == "dev"));
-        update_flavour_file($requirement, $yaml_hash);
+        $devmode = isset($yaml['install']['mode']) && $yaml['install']['mode'] == "dev";
+        $requirement = add_requirement($yaml['install']['package'], $devmode);
+        update_flavour_file($requirement, $yaml_hash, $devmode);
     }
 
     if (isset($yaml['install']) && isset($yaml['install']['post-install'])) {
         post_install($yaml['install']['post-install']);
     }
-
 }
 
 function save_yaml($yaml) : string
@@ -60,8 +60,19 @@ function add_requirement($requirement, $devmode=false) : string
     return $requirement;
 }
 
+function check_version(&$yaml, $requirement, $version)
+{
+    foreach (array_keys($yaml['addons']) as $addon_key) {
+        list($addon, $addon_version) = explode(':', $addon_key);
+        if ($addon == $requirement) {
+            if ($version !== $addon_version) {
+                unset($yaml['addons'][$addon .':'. $addon_version]);
+            }
+        }
+    }
+}
 
-function update_flavour_file($requirement, $yaml_hash) : void
+function update_flavour_file($requirement, $yaml_hash, $devmode=false) : void
 {
     $yaml = Yaml::parse(file_get_contents(FLAVOUR_FILE));
 
@@ -73,8 +84,10 @@ function update_flavour_file($requirement, $yaml_hash) : void
         list($requirement, $version) = explode(':', $requirement);
     } else {
         $json = json_decode(file_get_contents('/app/composer.json'), true);
-        $version = $json['require'][$requirement];
+        $version = $json['require'. ($devmode ? '-dev' : '')][$requirement];
     }
+
+    check_version($yaml, $requirement, $version);
 
     $yaml['addons'][$requirement .":". $version] = [
         //'manager' => str_replace('flavour/', '', $_ENV['FAM_IDENTIFIER']),
