@@ -8,32 +8,47 @@ use Symfony\Component\Yaml\Exception\ParseException;
 
 const FLAVOUR_FILE = 'app.flavour';
 
-function remove()
+function remove() : int
 {
     $yaml = Yaml::parse(stream_get_contents(STDIN));
 
     if (isset($yaml['install']) && isset($yaml['install']['package'])) {
-        remove_requirement($yaml['install']['package'], (isset($yaml['install']['mode']) && $yaml['install']['mode'] == "dev"));
+        return remove_requirement($yaml['install']['package'], (isset($yaml['install']['mode']) && $yaml['install']['mode'] == "dev"));
     }
+
+    return 0;
 }
 
-function remove_requirement($requirement, $devmode=false)
+function get_addon_name($requirement) : string
+{
+    return (strstr($requirement, ':')) ? explode(':', $requirement)[0] : $requirement;
+}
+
+function is_installed($requirement, &$yaml) : bool
+{
+    foreach (array_keys($yaml['addons']) as $addon_key) {
+        list($addon, $addon_version) = explode(':', $addon_key);
+        if ($addon == get_addon_name($requirement)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function remove_requirement($requirement, $devmode=false) : int
 {
     $yaml = Yaml::parse(file_get_contents(FLAVOUR_FILE));
 
-    if (strstr($requirement, ':')) {
-        list($package, $version) = explode(':', $requirement);
-    }
-
-    if (!isset($yaml['addons'][$requirement])) {
-        throw new \Exception("Requirement $requirement non-existent! ");
+    if (!is_installed($requirement, $yaml)) {
+        throw new \Exception("Requirement ${requirement} non-existent! ");
+        return 1;
     }
 
     $command = [
         "composer",
         "remove",
         "--no-update",
-        $package,
+        get_addon_name($requirement),
     ];
 
     if ($devmode) {
@@ -43,11 +58,14 @@ function remove_requirement($requirement, $devmode=false)
     exec(implode(" ", $command), $output, $response);
 
     if ($response > 0) {
-        throw new \Exception("Requirement could not be removed! ");
+        throw new \Exception("Requirement ${requirement} could not be removed! ");
+        return 2;
     }
 
     unset($yaml['addons'][$requirement]);
     file_put_contents(FLAVOUR_FILE, Yaml::dump($yaml, 4));
+
+    return 0;
 }
 
-remove();
+exit(remove());
