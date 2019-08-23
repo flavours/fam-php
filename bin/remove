@@ -1,0 +1,53 @@
+#!/usr/bin/env php
+<?php
+
+require("/fam-php/vendor/autoload.php");
+
+use Symfony\Component\Yaml\Yaml;
+use Symfony\Component\Yaml\Exception\ParseException;
+
+const FLAVOUR_FILE = 'app.flavour';
+
+function remove()
+{
+    $yaml = Yaml::parse(stream_get_contents(STDIN));
+
+    if (isset($yaml['install']) && isset($yaml['install']['package'])) {
+        remove_requirement($yaml['install']['package'], (isset($yaml['install']['mode']) && $yaml['install']['mode'] == "dev"));
+    }
+}
+
+function remove_requirement($requirement, $devmode=false)
+{
+    $yaml = Yaml::parse(file_get_contents(FLAVOUR_FILE));
+
+    if (strstr($requirement, ':')) {
+        list($package, $version) = explode(':', $requirement);
+    }
+
+    if (!isset($yaml['addons'][$requirement])) {
+        throw new \Exception("Requirement $requirement non-existent! ");
+    }
+
+    $command = [
+        "composer",
+        "remove",
+        "--no-update",
+        $package,
+    ];
+
+    if ($devmode) {
+        $command[] = "--dev";
+    }
+
+    exec(implode(" ", $command), $output, $response);
+
+    if ($response > 0) {
+        throw new \Exception("Requirement could not be removed! ");
+    }
+
+    unset($yaml['addons'][$requirement]);
+    file_put_contents(FLAVOUR_FILE, Yaml::dump($yaml, 4));
+}
+
+remove();

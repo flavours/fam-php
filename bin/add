@@ -1,0 +1,108 @@
+#!/usr/bin/env php
+<?php
+
+require("/fam-php/vendor/autoload.php");
+
+use Symfony\Component\Yaml\Yaml;
+use Symfony\Component\Yaml\Exception\ParseException;
+
+const FLAVOUR_FILE = 'app.flavour';
+
+function add() : void
+{
+    $yaml_str = stream_get_contents(STDIN);
+    $yaml = Yaml::parse($yaml_str);
+    $yaml_hash = save_yaml($yaml_str);
+
+    if (isset($yaml['install']) && isset($yaml['install']['package'])) {
+        $requirement = add_requirement($yaml['install']['package'], (isset($yaml['install']['mode']) && $yaml['install']['mode'] == "dev"));
+        update_flavour_file($requirement, $yaml_hash);
+    }
+
+    if (isset($yaml['install']) && isset($yaml['install']['post-install'])) {
+        post_install($yaml['install']['post-install']);
+    }
+
+}
+
+function save_yaml($yaml) : string
+{
+    $path = implode(DIRECTORY_SEPARATOR, ['.flavour', 'addons']);
+    $hash = hash('sha256', $yaml);
+
+    if (!is_dir($path)) {
+        mkdir($path, 0777, true);
+    }
+    file_put_contents($path . DIRECTORY_SEPARATOR . $hash, $yaml);
+
+    return $hash;
+}
+
+function add_requirement($requirement, $devmode=false) : string
+{
+    $command = [
+        "composer",
+        "require",
+        "--no-update",
+        $requirement,
+    ];
+
+    if ($devmode) {
+        $command[] = "--dev";
+    }
+
+    exec(implode(" ", $command), $output, $response);
+
+    if ($response > 0) {
+        throw new \Exception("Requirement could not be installed! ");
+    }
+
+    return $requirement;
+}
+
+
+function update_flavour_file($requirement, $yaml_hash) : void
+{
+    $yaml = Yaml::parse(file_get_contents(FLAVOUR_FILE));
+
+    if (!isset($yaml['addons'])) {
+        $yaml['addons'] = [];
+    }
+
+    if (strstr($requirement, ':')) {
+        list($requirement, $version) = explode(':', $requirement);
+    } else {
+        $json = json_decode(file_get_contents('/app/composer.json'), true);
+        $version = $json['require'][$requirement];
+    }
+
+    $yaml['addons'][$requirement .":". $version] = [
+        //'manager' => str_replace('flavour/', '', $_ENV['FAM_IDENTIFIER']),
+        'manager' => $_ENV['FAM_IDENTIFIER'],
+        'hash' => $yaml_hash,
+    ];
+
+    file_put_contents(FLAVOUR_FILE, Yaml::dump($yaml, 4));
+}
+
+
+function post_install($scripts) : void
+{
+    if (is_array($scripts)) {
+        exec('composer update --no-scripts');
+
+        foreach ($scripts as $script) {
+            exec($script, $output);
+        }
+    }
+}
+
+/**
+ * TODO: just for debugging purposes, will be removed
+ */
+function lg($var)
+{
+    file_put_contents("flavour.log", print_r($var, true), FILE_APPEND);
+}
+
+add();

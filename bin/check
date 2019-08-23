@@ -1,0 +1,30 @@
+#!/usr/bin/env php
+<?php
+
+require("/fam-php/vendor/autoload.php");
+
+use Symfony\Component\Yaml\Yaml;
+use Symfony\Component\Yaml\Exception\ParseException;
+
+function check()
+{
+    try {
+        $yaml = Yaml::parse(stream_get_contents(STDIN));
+    } catch (ParseException $exception) {
+        printf('Unable to parse the YAML string: %s', $exception->getMessage());
+        exit(1);
+    }
+
+    if(!validate_schema($yaml)) {
+        printf('Unable to validate configuration');
+        exit(1);
+    }
+
+}
+
+function validate_schema() {
+    // TODO: implement
+    return true;
+}
+
+check();
