@@ -13,14 +13,15 @@ function add() : void
     $yaml_str = stream_get_contents(STDIN);
     $yaml = Yaml::parse($yaml_str);
     $yaml_hash = save_yaml($yaml_str);
+    $devmode = $yaml['install']['mode'] == "dev";
+    $composer_requirement = $yaml['install']['package'];
+    $flavour_package = $yaml['meta']['name'];
+    $flavour_package_version = $yaml['meta']['version'];
 
-    if (isset($yaml['install']) && isset($yaml['install']['package'])) {
-        $devmode = isset($yaml['install']['mode']) && $yaml['install']['mode'] == "dev";
-        $requirement = add_requirement($yaml['install']['package'], $devmode);
-        update_flavour_file($requirement, $yaml_hash, $devmode);
-    }
+    add_requirement($composer_requirement, $devmode);
+    update_flavour_file($flavour_package, $flavour_package_version, $yaml_hash, $devmode);
 
-    if (isset($yaml['install']) && isset($yaml['install']['post-install'])) {
+    if (isset($yaml['install']['post-install'])) {
         post_install($yaml['install']['post-install']);
     }
 }
@@ -60,11 +61,11 @@ function add_requirement($requirement, $devmode=false) : string
     return $requirement;
 }
 
-function check_version(&$yaml, $requirement, $version)
+function update_version(&$yaml, $flavour_package, $version) : void
 {
     foreach (array_keys($yaml['addons']) as $addon_key) {
         list($addon, $addon_version) = explode(':', $addon_key);
-        if ($addon == $requirement) {
+        if ($addon == $flavour_package) {
             if ($version !== $addon_version) {
                 unset($yaml['addons'][$addon .':'. $addon_version]);
             }
@@ -72,25 +73,17 @@ function check_version(&$yaml, $requirement, $version)
     }
 }
 
-function update_flavour_file($requirement, $yaml_hash, $devmode=false) : void
+function update_flavour_file($flavour_package, $flavour_package_version, $yaml_hash, $devmode=false) : void
 {
     $yaml = Yaml::parse(file_get_contents(FLAVOUR_FILE));
 
     if (!isset($yaml['addons'])) {
-        $yaml['addons'] = [];
+        $yaml['addons'] = $yaml['addons'] ?: [];
     }
 
-    if (strstr($requirement, ':')) {
-        list($requirement, $version) = explode(':', $requirement);
-    } else {
-        $json = json_decode(file_get_contents('/app/composer.json'), true);
-        $version = $json['require'. ($devmode ? '-dev' : '')][$requirement];
-    }
+    update_version($yaml, $flavour_package, $flavour_package_version);
 
-    check_version($yaml, $requirement, $version);
-
-    $yaml['addons'][$requirement .":". $version] = [
-        //'manager' => str_replace('flavour/', '', $_ENV['FAM_IDENTIFIER']),
+    $yaml['addons'][$flavour_package .":". $flavour_package_version] = [
         'manager' => $_ENV['FAM_IDENTIFIER'],
         'hash' => $yaml_hash,
     ];

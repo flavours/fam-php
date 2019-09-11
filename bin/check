@@ -22,8 +22,9 @@ function check()
 
 }
 
-function validate_schema() {
-    // TODO: implement
+function validate_schema($yaml) {
+    if(!isset($yaml['install']) || !isset($yaml['meta']) || !isset($yaml['install']['package']) || !isset($yaml['meta']['name']) || !isset($yaml['meta']['version']))
+        return false;
     return true;
 }
 
