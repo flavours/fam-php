@@ -46,6 +46,8 @@ function remove_requirement($addon, $devmode=false) : int
     }
 
     unset($yaml['addons'][$identifier]);
+    if(count($yaml['addons']) == 0)
+        unset($yaml['addons']);
     file_put_contents(FLAVOUR_FILE, Yaml::dump($yaml, 4));
 
     return 0;
