@@ -1,6 +1,6 @@
 FROM composer:latest
 
-ENV FAM_IDENTIFIER flavour/fam-php:0.0.4
+ENV FAM_IDENTIFIER flavour/fam-php:0.1
 
 RUN mkdir -p /app
 RUN mkdir -p /fam-php
