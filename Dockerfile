@@ -1,6 +1,6 @@
 FROM composer:latest
 
-ENV FAM_IDENTIFIER flavour/fam-php:0.1.1
+ENV FAM_IDENTIFIER flavour/fam-php:0.2.0
 
 RUN mkdir -p /app
 RUN mkdir -p /fam-php
@@ -8,6 +8,7 @@ COPY composer.* /fam-php/
 
 WORKDIR /fam-php
 RUN composer install
+RUN rm -rf /tmp/cache
 
 WORKDIR /app
 

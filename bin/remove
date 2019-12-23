@@ -11,7 +11,8 @@ const FLAVOUR_FILE = 'app.flavour';
 function remove() : int
 {
     $addon = Yaml::parse(stream_get_contents(STDIN));
-    return remove_requirement($addon, (isset($yaml['install']['mode']) && $yaml['install']['mode'] == "dev"));
+    $devmode = isset($yaml['install']['mode']) && $yaml['install']['mode'] == "dev";
+    return remove_requirement($addon, $devmode);
 }
 
 function remove_requirement($addon, $devmode=false) : int
@@ -21,7 +22,7 @@ function remove_requirement($addon, $devmode=false) : int
     $identifier = $addon['meta']['name'] .":". $addon['meta']['version'];
 
 
-    if (!array_key_exists($identifier, $yaml['addons']))  {
+    if (!array_key_exists($identifier, $yaml['addons'])) {
         throw new \Exception("Requirement ${requirement} non-existent! ");
         return 1;
     }
@@ -30,8 +31,7 @@ function remove_requirement($addon, $devmode=false) : int
     $command = [
         "composer",
         "remove",
-        "--no-update",
-       $requirement,
+        escapeshellarg($requirement),
     ];
 
     if ($devmode) {
@@ -46,8 +46,9 @@ function remove_requirement($addon, $devmode=false) : int
     }
 
     unset($yaml['addons'][$identifier]);
-    if(count($yaml['addons']) == 0)
+    if (count($yaml['addons']) == 0) {
         unset($yaml['addons']);
+    }
     file_put_contents(FLAVOUR_FILE, Yaml::dump($yaml, 4));
 
     return 0;

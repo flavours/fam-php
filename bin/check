@@ -12,20 +12,22 @@ function check()
         $yaml = Yaml::parse(stream_get_contents(STDIN));
     } catch (ParseException $exception) {
         printf('Unable to parse the YAML string: %s', $exception->getMessage());
-        exit(1);
+        return 1;
     }
 
-    if(!validate_schema($yaml)) {
+    if (!validate_schema($yaml)) {
         printf('Unable to validate configuration');
-        exit(1);
+        return 2;
     }
-
+    return 0;
 }
 
-function validate_schema($yaml) {
-    if(!isset($yaml['install']) || !isset($yaml['meta']) || !isset($yaml['install']['package']) || !isset($yaml['meta']['name']) || !isset($yaml['meta']['version']))
+function validate_schema($yaml)
+{
+    if (!isset($yaml['install']) || !isset($yaml['meta']) || !isset($yaml['install']['package']) || !isset($yaml['meta']['name']) || !isset($yaml['meta']['version'])) {
         return false;
+    }
     return true;
 }
 
-check();
+exit(check());

@@ -8,22 +8,25 @@ use Symfony\Component\Yaml\Exception\ParseException;
 
 const FLAVOUR_FILE = 'app.flavour';
 
-function add() : void
+function add()
 {
     $yaml_str = stream_get_contents(STDIN);
     $yaml = Yaml::parse($yaml_str);
     $yaml_hash = save_yaml($yaml_str);
     $devmode = $yaml['install']['mode'] == "dev";
+    $require_only = (bool) $yaml['install']['require-only'] ?? "true";
     $composer_requirement = $yaml['install']['package'];
     $flavour_package = $yaml['meta']['name'];
     $flavour_package_version = $yaml['meta']['version'];
 
-    add_requirement($composer_requirement, $devmode);
+    add_requirement($composer_requirement, $devmode, $require_only);
     update_flavour_file($flavour_package, $flavour_package_version, $yaml_hash, $devmode);
 
     if (isset($yaml['install']['post-install'])) {
         post_install($yaml['install']['post-install']);
     }
+
+    return 0;
 }
 
 function save_yaml($yaml) : string
@@ -39,18 +42,19 @@ function save_yaml($yaml) : string
     return $hash;
 }
 
-function add_requirement($requirement, $devmode=false) : string
+function add_requirement($requirement, $devmode=false, $require_only=true) : string
 {
-    $command = [
-        "composer",
-        "require",
-        "--no-update",
-        $requirement,
-    ];
+    $command = ["composer require"];
+
+    if ($require_only) {
+        $command[] = "--no-update";
+    }
 
     if ($devmode) {
         $command[] = "--dev";
     }
+
+    $command[] = escapeshellarg($requirement);
 
     exec(implode(" ", $command), $output, $response);
 
@@ -73,7 +77,7 @@ function update_version(&$yaml, $flavour_package, $version) : void
     }
 }
 
-function update_flavour_file($flavour_package, $flavour_package_version, $yaml_hash, $devmode=false) : void
+function update_flavour_file($flavour_package, $flavour_package_version, $yaml_hash, $devmode=false)
 {
     $yaml = Yaml::parse(file_get_contents(FLAVOUR_FILE));
 
@@ -88,17 +92,24 @@ function update_flavour_file($flavour_package, $flavour_package_version, $yaml_h
         'hash' => $yaml_hash,
     ];
 
-    file_put_contents(FLAVOUR_FILE, Yaml::dump($yaml, 4));
+    $bytes_written = file_put_contents(FLAVOUR_FILE, Yaml::dump($yaml, 4));
+
+    if ($bytes_written === false) {
+        throw new \Exception("Can't write ". FLAVOUR_FILE);
+    }
 }
 
 
 function post_install($scripts) : void
 {
     if (is_array($scripts)) {
-        exec('composer update --no-scripts');
+        exec('composer update --no-scripts', $output);
 
         foreach ($scripts as $script) {
-            exec($script, $output);
+            exec(escapeshellcmd($script), $output, $return_var);
+            if ($return_var !== 0) {
+                throw new \Exception("Can't execute post-install command: ". $script);
+            }
         }
     }
 }
@@ -108,7 +119,7 @@ function post_install($scripts) : void
  */
 function lg($var)
 {
-    file_put_contents("flavour.log", print_r($var, true), FILE_APPEND);
+    file_put_contents("flavour.log", print_r($var, true) ."\n", FILE_APPEND);
 }
 
 add();
